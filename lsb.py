@@ -75,11 +75,11 @@ def min_start(cover_file):
         else:
             return 0 
 
-def gen_start(min, coverlen, secretlen, key):
+def gen_start(min, coverlen, secretlen, key: str):
     seed = 0
-    seed += sum(int(x) for x in key)
+    seed += sum(ord(x) for x in key)
     rng = random.Random(seed)
-    return rng.randint(min, (secretlen - coverlen))
+    return rng.randint(min, (coverlen-secretlen))
 
 
 def embed_message(cover_file: str, secret_file: str, encrypt: bool, randstart: bool, lsb_bits: int, key: str, outname: str):
@@ -102,7 +102,7 @@ def embed_message(cover_file: str, secret_file: str, encrypt: bool, randstart: b
 
     start = 1000
     if (randstart):
-        start = gen_start(flag_byte + 5, len(cover), len(sign_start + secret + sign_end))
+        start = gen_start(flag_byte + 5, len(cover), len(sign_start + secret + sign_end), key)
 
     # pertama, embed flags
     stego = embed_flags(cover, flag_byte, encrypt, lsb_bits)
@@ -146,5 +146,5 @@ def extract_message(steg_file: str, key: str):
     
     return content.decode()
 
-embed_message("seiza ni naretara.mp3", "mesg", False, False, 3, "password", "hasil.mp3")
+embed_message("seiza ni naretara.mp3", "mesg", True, True, 3, "password", "hasil.mp3")
 print(extract_message("hasil.mp3", "password"))
