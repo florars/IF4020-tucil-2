@@ -24,7 +24,6 @@ def embed(cover: bytes, secret: bytes, start: int, lsb_bits: int):
 
 def embed_flags(cover: bytes, start_idx: int, encrypt: bool, lsb_bits: int):
     # manual soalnya kalo ada alignment issue lagi i WILL crash out
-
     cover_arr = bytearray(cover)
     
     cover_arr[start_idx] = (cover_arr[start_idx] & 0b11111110) | int(encrypt)
@@ -79,7 +78,7 @@ def gen_start(min, coverlen, secretlen, key: str):
     seed = 0
     seed += sum(ord(x) for x in key)
     rng = random.Random(seed)
-    return rng.randint(min, (coverlen-secretlen))
+    return (rng.randint(min, (coverlen-secretlen)) // 8 * 8) # rounding to nearest 8th biar alignmentnya ga meledak pas extract
 
 
 def embed_message(cover_file: str, secret_file: str, encrypt: bool, randstart: bool, lsb_bits: int, key: str, outname: str):
@@ -145,6 +144,3 @@ def extract_message(steg_file: str, key: str):
         content = vig_dec(content, key)
     
     return content.decode()
-
-embed_message("seiza ni naretara.mp3", "mesg", True, True, 3, "password", "hasil.mp3")
-print(extract_message("hasil.mp3", "password"))
