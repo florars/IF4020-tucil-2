@@ -1,4 +1,8 @@
-def embed(cover, secret, start, lsb_bits = 1):
+from mutagen.mp3 import MP3
+from mutagen.id3 import ID3
+import random
+
+def embed(cover, secret, start, lsb_bits):
     if not (1 <= lsb_bits <= 4):
         raise ValueError("LSB bits can only be between 1 to 4 bits.")
 
@@ -40,3 +44,53 @@ def extract(steg, start, lsb_bits, length):
     secret = int(all_bits, 2).to_bytes(length, byteorder='big')
     return secret
 
+def vig_enc(message, key: str):
+    keyb = key.encode()
+    key_len = len(keyb)
+    crypt = bytes((message[i] + keyb[i % key_len]) % 256 for i in range(len(message)))
+    return bytes(b ^ 0b01010101 for b in crypt) #menghindari sync words
+
+def vig_dec(cipher, key: str):
+    keyb = key.encode()
+    key_len = len(key)
+    cipher = bytes(b ^ 0b01010101 for b in cipher)
+    return bytes((cipher[i] - keyb[i % key_len]) % 256 for i in range(len(cipher)))
+
+def min_start(cover_file):
+    with open(cover_file, "rb") as f:
+        header = f.read(10)
+        if header[0:3] == b"ID3":
+            size_bytes = header[6:10]
+            size = ((size_bytes[0] & 0x7F) << 21) | \
+                   ((size_bytes[1] & 0x7F) << 14) | \
+                   ((size_bytes[2] & 0x7F) << 7) | \
+                   (size_bytes[3] & 0x7F)
+            return 10 + size
+        else:
+            return 0 
+
+def gen_start(cover_file, coverlen, secretlen, key):
+    seed = 0
+    seed += sum(int(x) for x in key)
+    rng = random.Random(seed)
+    return rng.randint(min_start(cover_file), (secretlen - coverlen))
+
+
+def embed_message(cover_file: str, secret_file: str, encrypt: bool, randstart: bool, lsb_bits: int, key: str, outname: str):
+    with open(cover_file, "rb") as file:
+        cover = file.read()
+    with open(secret_file, "rb") as file:
+        secret = file.read()
+
+    print(len(cover), len(secret))
+    if (encrypt):
+        secret = vig_enc(secret, key)
+    
+    start = 1000
+    if (randstart):
+        start = gen_start(cover_file, len(cover), len(secret))
+
+    res = embed(cover, secret, start, lsb_bits)
+
+    with open(outname, "wb+") as file:
+        file.write(res)
