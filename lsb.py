@@ -1,5 +1,6 @@
 import random
 import math
+from mutagen.id3 import ID3
 
 sign_start = b"signature"
 sign_end = b"endsignature"
@@ -7,7 +8,7 @@ sign_end = b"endsignature"
 def embed(cover: bytes, secret: bytes, start: int, lsb_bits: int):
     secret_bits = ''.join(f'{byte:08b}' for byte in secret)
 
-    needed_bytes = (len(secret_bits) + lsb_bits - 1) // lsb_bits
+    needed_bytes = math.ceil(len(secret_bits)/ lsb_bits)
     cover_arr = bytearray(cover)
 
     bit_index = 0
@@ -15,9 +16,7 @@ def embed(cover: bytes, secret: bytes, start: int, lsb_bits: int):
         chunk = secret_bits[bit_index:bit_index + lsb_bits]
         if len(chunk) < lsb_bits:
             chunk = chunk.ljust(lsb_bits, '0') 
-
         cover_arr[i] = (cover_arr[i] & (~((1 << lsb_bits) - 1))) | int(chunk, 2)
-
         bit_index += lsb_bits
 
     return bytes(cover_arr)
@@ -61,19 +60,6 @@ def vig_dec(cipher, key: str):
     cipher = bytes(b ^ 0b01010101 for b in cipher)
     return bytes((cipher[i] - keyb[i % key_len]) % 256 for i in range(len(cipher)))
 
-def min_start(cover_file):
-    with open(cover_file, "rb") as f:
-        header = f.read(10)
-        if header[0:3] == b"ID3":
-            size_bytes = header[6:10]
-            size = ((size_bytes[0] & 0x7F) << 21) | \
-                   ((size_bytes[1] & 0x7F) << 14) | \
-                   ((size_bytes[2] & 0x7F) << 7) | \
-                   (size_bytes[3] & 0x7F)
-            return 10 + size
-        else:
-            return 0 
-
 def gen_start(min, coverlen, secretlen, key: str):
     seed = 0
     seed += sum(ord(x) for x in key)
@@ -97,11 +83,19 @@ def embed_message(cover_file: str, secret_file: str, encrypt: bool, randstart: b
     if (encrypt):
         secret = vig_enc(secret, key)
     
-    flag_byte = min_start(cover_file)
+    # hitung needed bytes untuk memastikan cover file cukup panjang
+    needed_bytes = math.ceil(8 * (len(secret) + len (sign_end) + len(sign_start)) / lsb_bits) + 5
+    if len(cover) < needed_bytes:
+        raise ValueError(f"Cover file not big enough, need {needed_bytes/1000}KB of cover")
+    print(f"Need {needed_bytes/1024}KB of cover")
+
+    # cari panjang metadata
+    header = ID3(cover_file)
+    flag_byte = header.size + 1
 
     start = 1000
     if (randstart):
-        start = gen_start(flag_byte + 5, len(cover), len(sign_start + secret + sign_end), key)
+        start = gen_start(flag_byte + 5, len(cover), needed_bytes, key)
 
     # pertama, embed flags
     stego = embed_flags(cover, flag_byte, encrypt, lsb_bits)
@@ -113,7 +107,8 @@ def embed_message(cover_file: str, secret_file: str, encrypt: bool, randstart: b
         file.write(stego)
 
 def find_flags(steg_file: str, steg: bytes):
-    idx = min_start(steg_file)
+    header = ID3(steg_file)
+    idx = header.size + 1
     encrypt = bool(int(steg[idx]&1))
     lsb_bits = 0
     for i in range(4):
