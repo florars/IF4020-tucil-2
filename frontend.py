@@ -1,6 +1,8 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import pygame
+# Import LSB functions
+from lsb import embed_message, extract_message
 
 # init pygame mixer
 pygame.mixer.init()
@@ -108,7 +110,29 @@ save_entry.grid(row=7, column=1, padx=5, pady=5)
 ttk.Button(embed_frame, text="Browse", command=lambda: save_file(save_entry), style='TButton', cursor='hand2').grid(row=7, column=2, padx=5, pady=5)
 
 # Action button
-ttk.Button(embed_frame, text="Embed Message", command=lambda: messagebox.showinfo("Info", "Embed functionality not implemented yet"), style='TButton', cursor='hand2').grid(row=8, column=0, columnspan=3, pady=15)
+
+# --- Embed action ---
+def embed_action():
+    cover_file = cover_entry.get()
+    secret_file = secret_entry.get()
+    encrypt = encrypt_var.get()
+    randstart = random_seed_var.get()
+    try:
+        lsb_bits = int(lsb_spin.get())
+    except Exception:
+        lsb_bits = 1
+    key = key_entry.get()
+    outname = save_entry.get()
+    if not (cover_file and secret_file and outname):
+        messagebox.showerror("Error", "Please fill all required fields.")
+        return
+    try:
+        embed_message(cover_file, secret_file, encrypt, randstart, lsb_bits, key, outname)
+        messagebox.showinfo("Success", f"Message embedded successfully!\nSaved as: {outname}")
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to embed message:\n{e}")
+
+ttk.Button(embed_frame, text="Embed Message", command=embed_action, style='TButton', cursor='hand2').grid(row=8, column=0, columnspan=3, pady=15)
 
 
 # ---------------- EXTRACT ----------------
@@ -139,6 +163,24 @@ extract_save_entry.grid(row=3, column=1, padx=5, pady=5)
 ttk.Button(extract_frame, text="Browse", command=lambda: save_file(extract_save_entry, default_ext=".bin"), style='TButton', cursor='hand2').grid(row=3, column=2, padx=5, pady=5)
 
 # Action button
-ttk.Button(extract_frame, text="Extract Message", command=lambda: messagebox.showinfo("Info", "Extract functionality not implemented yet"), style='TButton', cursor='hand2').grid(row=4, column=0, columnspan=3, pady=15)
+
+# --- Extract action ---
+def extract_action():
+    steg_file = stego_entry.get()
+    key = extract_key_entry.get()
+    outname = extract_save_entry.get()
+    if not (steg_file and outname):
+        messagebox.showerror("Error", "Please fill all required fields.")
+        return
+    try:
+        result = extract_message(steg_file, key)
+        # Save result to file
+        with open(outname, "w", encoding="utf-8") as f:
+            f.write(result)
+        messagebox.showinfo("Success", f"Message extracted and saved as: {outname}")
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to extract message:\n{e}")
+
+ttk.Button(extract_frame, text="Extract Message", command=extract_action, style='TButton', cursor='hand2').grid(row=4, column=0, columnspan=3, pady=15)
 
 root.mainloop()
