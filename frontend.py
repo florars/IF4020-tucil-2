@@ -3,6 +3,8 @@ from tkinter import ttk, filedialog, messagebox
 import pygame
 # Import LSB functions
 from lsb import embed_message, extract_message
+# Import PSNR
+from psnr import mp3_to_array, psnr
 
 # init pygame mixer
 pygame.mixer.init()
@@ -111,6 +113,9 @@ ttk.Button(embed_frame, text="Browse", command=lambda: save_file(save_entry), st
 
 # Action button
 
+psnr_label = ttk.Label(embed_frame, text="", font=('Segoe UI', 10, 'italic'), background=BG_YELLOW, foreground=FG_DARK)
+psnr_label.grid(row=9, column=0, columnspan=3, pady=(0,10))
+
 # --- Embed action ---
 def embed_action():
     cover_file = cover_entry.get()
@@ -123,12 +128,22 @@ def embed_action():
         lsb_bits = 1
     key = key_entry.get()
     outname = save_entry.get()
+    psnr_label.config(text="")
     if not (cover_file and secret_file and outname):
         messagebox.showerror("Error", "Please fill all required fields.")
         return
     try:
         embed_message(cover_file, secret_file, encrypt, randstart, lsb_bits, key, outname)
-        messagebox.showinfo("Success", f"Message embedded successfully!\nSaved as: {outname}")
+        # Calculate PSNR
+        try:
+            cover_samples = mp3_to_array(cover_file)
+            stego_samples = mp3_to_array(outname)
+            psnr_value = psnr(cover_samples, stego_samples)
+            psnr_label.config(text=f"PSNR: {psnr_value:.2f} dB")
+            messagebox.showinfo("Success", f"Message embedded successfully!\nSaved as: {outname}")
+        except Exception as psnr_e:
+            psnr_label.config(text=f"PSNR calculation failed: {psnr_e}")
+            messagebox.showinfo("Success", f"Message embedded successfully!\nSaved as: {outname}")
     except Exception as e:
         messagebox.showerror("Error", f"Failed to embed message:\n{e}")
 
