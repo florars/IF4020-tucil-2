@@ -140,7 +140,7 @@ def embed_action():
             psnr_label.config(text=f"PSNR: {psnr_value:.2f} dB")
             messagebox.showinfo("Success", f"Message embedded successfully!\nSaved as: {outname}")
         except Exception as psnr_e:
-            psnr_label.config(text=f"PSNR calculation failed: {psnr_e}")
+            psnr_label.config(text=f"PSNR calculation failed: Potential MP3 header corruption.")
             messagebox.showinfo("Success", f"Message embedded successfully!\nSaved as: {outname}")
     except Exception as e:
         messagebox.showerror("Error", f"Failed to embed message:\n{e}")
