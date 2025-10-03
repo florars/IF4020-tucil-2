@@ -4,7 +4,7 @@ import pygame
 # Import LSB functions
 from lsb import embed_message, extract_message
 # Import PSNR
-from psnr import mp3_to_array, psnr
+from psnr import psnr
 
 # init pygame mixer
 pygame.mixer.init()
@@ -136,9 +136,7 @@ def embed_action():
         embed_message(cover_file, secret_file, encrypt, randstart, lsb_bits, key, outname)
         # Calculate PSNR
         try:
-            cover_samples = mp3_to_array(cover_file)
-            stego_samples = mp3_to_array(outname)
-            psnr_value = psnr(cover_samples, stego_samples)
+            psnr_value = psnr(cover_file, outname)
             psnr_label.config(text=f"PSNR: {psnr_value:.2f} dB")
             messagebox.showinfo("Success", f"Message embedded successfully!\nSaved as: {outname}")
         except Exception as psnr_e:
