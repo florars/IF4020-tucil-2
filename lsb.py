@@ -176,8 +176,9 @@ def extract_message(steg_file: str, key: str):
     return content, ext
 
 
-embed_message("birdbrain.mp3", "payloads/small.pdf", True, False, 3, "password", "generated/hasil.mp3")
-content, ext = extract_message("generated/hasil.mp3", "password")
-filename = "generated/hasil2." + str(ext)
-with open(filename, "wb+") as file:
-    file.write(content)
+if __name__ == "__main__":
+    embed_message("birdbrain.mp3", "payloads/small.pdf", True, False, 3, "password", "generated/hasil.mp3")
+    content, ext = extract_message("generated/hasil.mp3", "password")
+    filename = "generated/hasil2." + str(ext)
+    with open(filename, "wb+") as file:
+        file.write(content)
