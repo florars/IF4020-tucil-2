@@ -1,6 +1,9 @@
 import random
 import math
 from mutagen.id3 import ID3
+import librosa
+import numpy as np
+import soundfile as sf
 
 sign_start = b"signature"
 sign_end = b"endsignature"
@@ -74,8 +77,11 @@ def embed_message(cover_file: str, secret_file: str, encrypt: bool, randstart: b
     if not (1 <= lsb_bits <= 4):
         raise ValueError("LSB bits can only be between 1 to 4 bits.")
     
-    with open(cover_file, "rb") as file:
-        cover = file.read()
+    cover, sr = librosa.load(cover_file)
+    
+    # scale to cast to int
+    cover_int = (cover * 32767).astype(np.int16)
+    cover_int = bytearray(cover_int.tobytes())
 
     with open(secret_file, "rb") as file:
         secret = file.read()
@@ -85,42 +91,49 @@ def embed_message(cover_file: str, secret_file: str, encrypt: bool, randstart: b
     
     # hitung needed bytes untuk memastikan cover file cukup panjang
     needed_bytes = math.ceil(8 * (len(secret) + len (sign_end) + len(sign_start)) / lsb_bits) + 5
-    if len(cover) < needed_bytes:
+    if len(cover_int) < needed_bytes:
         raise ValueError(f"Cover file not big enough, need {needed_bytes/1000}KB of cover")
     print(f"Need {needed_bytes/1024}KB of cover")
 
-    # cari panjang metadata
-    header = ID3(cover_file)
-    flag_byte = header.size + 1
-
     start = 1000
     if (randstart):
-        start = gen_start(flag_byte + 5, len(cover), needed_bytes, key)
+        start = gen_start(5, len(cover_int), needed_bytes, key)
 
     # pertama, embed flags
-    stego = embed_flags(cover, flag_byte, encrypt, lsb_bits)
+    stego = embed_flags(cover_int, 0, encrypt, lsb_bits)
     
     # kedua, embed secret dan sign
     stego = embed(stego, sign_start + secret + sign_end, start, lsb_bits)
 
-    with open(outname, "wb+") as file:
-        file.write(stego)
+    for i in range (5):
+        print(bin(stego[i]))
+    print("---")
+    
+    # balikin ke int terus ke float.... idk man what is this
+    stego_int = np.frombuffer(stego, dtype=np.int16)
+    stego_float = stego_int.astype(np.float32) / 32767.0
 
-def find_flags(steg_file: str, steg: bytes):
-    header = ID3(steg_file)
-    idx = header.size + 1
-    encrypt = bool(int(steg[idx]&1))
+    sf.write(outname, stego_float, sr)
+
+def find_flags(steg: bytes):
+    encrypt = bool(int(steg[0]&1))
     lsb_bits = 0
     for i in range(4):
-        bit = steg[idx + 1 + i] & 1 
+        bit = steg[1 + i] & 1 
         lsb_bits = (lsb_bits << 1) | bit
     return encrypt, lsb_bits
 
 def extract_message(steg_file: str, key: str):
-    with open(steg_file, "rb") as file:
-        steg = file.read()
-    
-    encrypt, lsb_bits = find_flags(steg_file, steg)
+    steg, sr = librosa.load(steg_file)
+
+    # scale to cast to int
+    steg = (steg * 32767).astype(np.int16)
+    steg = bytearray(steg.tobytes())
+
+    for i in range (5):
+        print(bin(steg[i]))
+
+    encrypt, lsb_bits = find_flags(steg)
     print(encrypt, lsb_bits)
 
     steg = extract(steg, lsb_bits)
@@ -139,3 +152,7 @@ def extract_message(steg_file: str, key: str):
         content = vig_dec(content, key)
     
     return content.decode()
+
+
+embed_message("seiza ni naretara.mp3", "payloads/mesg", False, False, 2, "password", "new1.wav")
+print(extract_message("new1.wav", "password"))
