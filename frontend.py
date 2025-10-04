@@ -18,8 +18,9 @@ def browse_file(entry_widget, filetypes):
         entry_widget.delete(0, tk.END)
         entry_widget.insert(0, filename)
 
-def save_file(entry_widget, default_ext=".mp3"):
-    filename = filedialog.asksaveasfilename(defaultextension=default_ext)
+def save_file(entry_widget):
+    filetypes = [("MP3 files", "*.mp3"), ("All files", "*.*")]
+    filename = filedialog.asksaveasfilename(defaultextension=".mp3", filetypes=filetypes)
     if filename:
         entry_widget.delete(0, tk.END)
         entry_widget.insert(0, filename)
@@ -169,28 +170,42 @@ ttk.Label(extract_frame, text="Stego Key / Seed:").grid(row=2, column=0, padx=10
 extract_key_entry = ttk.Entry(extract_frame, width=30)
 extract_key_entry.grid(row=2, column=1, padx=5, pady=5, sticky="w")
 
-# Save as
-ttk.Label(extract_frame, text="Save Secret File As:").grid(row=3, column=0, padx=10, pady=5, sticky="w")
-extract_save_entry = ttk.Entry(extract_frame, width=50)
-extract_save_entry.grid(row=3, column=1, padx=5, pady=5)
-ttk.Button(extract_frame, text="Browse", command=lambda: save_file(extract_save_entry, default_ext=".bin"), style='TButton', cursor='hand2').grid(row=3, column=2, padx=5, pady=5)
-
 # Action button
 
 # --- Extract action ---
 def extract_action():
     steg_file = stego_entry.get()
     key = extract_key_entry.get()
-    outname = extract_save_entry.get()
-    if not (steg_file and outname):
-        messagebox.showerror("Error", "Please fill all required fields.")
+    if not steg_file:
+        messagebox.showerror("Error", "Please select a stego audio file to extract from.")
         return
     try:
+        # extract_message returns (content_bytes, extension)
         result = extract_message(steg_file, key)
-        # Save result to file
-        with open(outname, "w", encoding="utf-8") as f:
-            f.write(result)
-        messagebox.showinfo("Success", f"Message extracted and saved as: {outname}")
+        if isinstance(result, tuple) and len(result) == 2:
+            content, ext = result
+        else:
+            # backup if function returned only content
+            content = result
+            ext = "bin"
+
+        # where to save the extracted file with detected extension
+        default_ext = f".{ext}"
+        filetypes = [(f"{ext.upper()} files", f"*.{ext}"), ("All files", "*.*")]
+        save_path = filedialog.asksaveasfilename(defaultextension=default_ext, filetypes=filetypes)
+        if not save_path:
+            # user cancelled save dialog
+            return
+
+        # write bytes to filepath
+        with open(save_path, "wb") as f:
+            # content may be bytes or str; ensure bytes
+            if isinstance(content, str):
+                f.write(content.encode("utf-8"))
+            else:
+                f.write(content)
+
+        messagebox.showinfo("Success", f"Message extracted and saved as: {save_path}")
     except Exception as e:
         messagebox.showerror("Error", f"Failed to extract message:\n{e}")
 
