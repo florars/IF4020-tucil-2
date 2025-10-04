@@ -1,9 +1,21 @@
 import random
 import math
+import os
 from mutagen.id3 import ID3
 
 sign_start = b"signature"
 sign_end = b"endsignature"
+EXT_FLAG = {
+    "txt": 0b000,
+    "pdf": 0b001,
+    "doc": 0b010,
+    "png": 0b011,
+    "jpg": 0b100,
+    "exe": 0b101,
+    "dll": 0b110
+}
+
+EXT_FLAG_INV = {v: k for k, v in EXT_FLAG.items()}
 
 def embed(cover: bytes, secret: bytes, start: int, lsb_bits: int):
     secret_bits = ''.join(f'{byte:08b}' for byte in secret)
@@ -21,16 +33,26 @@ def embed(cover: bytes, secret: bytes, start: int, lsb_bits: int):
 
     return bytes(cover_arr)
 
-def embed_flags(cover: bytes, start_idx: int, encrypt: bool, lsb_bits: int):
+def embed_flags(cover: bytes, start_idx: int, encrypt: bool, lsb_bits: int, ext: str):
     # manual soalnya kalo ada alignment issue lagi i WILL crash out
     cover_arr = bytearray(cover)
     
+    # 1 bit encrypt info
     cover_arr[start_idx] = (cover_arr[start_idx] & 0b11111110) | int(encrypt)
     
-    for i in range(4):
-        bit = (lsb_bits >> (3 - i)) & 1
+    # 2 bit lsb_bits -1 
+    lsb = (lsb_bits - 1) & 0b11  
+    for i in range(2):
+        bit = (lsb >> (1 - i)) & 1
         cover_arr[start_idx + 1 + i] = (cover_arr[start_idx + 1 + i] & 0b11111110) | bit
     
+    # 3 bit original extension
+    ext_code = EXT_FLAG.get(ext, 0b111)  # 0b111 kalo gaada di list
+    print(ext, ext_code)
+    for i in range(3):
+        bit = (ext_code >> (2 - i)) & 1
+        cover_arr[start_idx + 3 + i] = (cover_arr[start_idx + 3 + i] & 0b11111110) | bit
+
     return bytes(cover_arr)
 
 def extract(steg: bytes, lsb_bits: int):
@@ -68,7 +90,7 @@ def gen_start(min, coverlen, secretlen, key: str):
 
 
 def embed_message(cover_file: str, secret_file: str, encrypt: bool, randstart: bool, lsb_bits: int, key: str, outname: str):
-    # 5 byte pertama: flags, 1 LSB
+    # 6 byte pertama: flags, 1 LSB
     # sisanya (sign_start + secret + sign_end) ditaruh setelah start
 
     if not (1 <= lsb_bits <= 4):
@@ -80,11 +102,14 @@ def embed_message(cover_file: str, secret_file: str, encrypt: bool, randstart: b
     with open(secret_file, "rb") as file:
         secret = file.read()
 
+    ext = os.path.splitext(secret_file)[1]
+    ext = ext[1:].lower() 
+
     if (encrypt):
         secret = vig_enc(secret, key)
     
     # hitung needed bytes untuk memastikan cover file cukup panjang
-    needed_bytes = math.ceil(8 * (len(secret) + len (sign_end) + len(sign_start)) / lsb_bits) + 5
+    needed_bytes = math.ceil(8 * (len(secret) + len (sign_end) + len(sign_start)) / lsb_bits) + 6
     if len(cover) < needed_bytes:
         raise ValueError(f"Cover file not big enough, need {needed_bytes/1000}KB of cover")
     print(f"Need {needed_bytes/1024}KB of cover")
@@ -95,10 +120,10 @@ def embed_message(cover_file: str, secret_file: str, encrypt: bool, randstart: b
 
     start = 1000
     if (randstart):
-        start = gen_start(flag_byte + 5, len(cover), needed_bytes, key)
+        start = gen_start(flag_byte + 6, len(cover), needed_bytes, key)
 
     # pertama, embed flags
-    stego = embed_flags(cover, flag_byte, encrypt, lsb_bits)
+    stego = embed_flags(cover, flag_byte, encrypt, lsb_bits, ext)
     
     # kedua, embed secret dan sign
     stego = embed(stego, sign_start + secret + sign_end, start, lsb_bits)
@@ -109,19 +134,29 @@ def embed_message(cover_file: str, secret_file: str, encrypt: bool, randstart: b
 def find_flags(steg_file: str, steg: bytes):
     header = ID3(steg_file)
     idx = header.size + 1
+
     encrypt = bool(int(steg[idx]&1))
-    lsb_bits = 0
-    for i in range(4):
-        bit = steg[idx + 1 + i] & 1 
-        lsb_bits = (lsb_bits << 1) | bit
-    return encrypt, lsb_bits
+
+    lsb = 0
+    for i in range(2):
+        bit = steg[idx + 1 + i] & 1
+        lsb = (lsb << 1) | bit
+    lsb_bits = lsb + 1  
+
+    ext = 0
+    for i in range(3):
+        bit = steg[idx + 3 + i] & 1
+        ext = (ext << 1) | bit
+    extension = EXT_FLAG_INV.get(ext, "unk")
+
+    return encrypt, lsb_bits, extension
 
 def extract_message(steg_file: str, key: str):
     with open(steg_file, "rb") as file:
         steg = file.read()
     
-    encrypt, lsb_bits = find_flags(steg_file, steg)
-    print(encrypt, lsb_bits)
+    encrypt, lsb_bits, ext = find_flags(steg_file, steg)
+    print(encrypt, lsb_bits, ext)
 
     steg = extract(steg, lsb_bits)
 
@@ -138,4 +173,11 @@ def extract_message(steg_file: str, key: str):
     if (encrypt):
         content = vig_dec(content, key)
     
-    return content.decode()
+    return content, ext
+
+
+embed_message("birdbrain.mp3", "payloads/small.pdf", True, False, 3, "password", "generated/hasil.mp3")
+content, ext = extract_message("generated/hasil.mp3", "password")
+filename = "generated/hasil2." + str(ext)
+with open(filename, "wb+") as file:
+    file.write(content)
