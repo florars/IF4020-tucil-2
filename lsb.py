@@ -8,7 +8,7 @@ sign_end = b"endsignature"
 EXT_FLAG = {
     "txt": 0b000,
     "pdf": 0b001,
-    "doc": 0b010,
+    "docx": 0b010,
     "png": 0b011,
     "jpg": 0b100,
     "exe": 0b101,
@@ -177,8 +177,8 @@ def extract_message(steg_file: str, key: str):
 
 
 if __name__ == "__main__":
-    embed_message("birdbrain.mp3", "payloads/small.pdf", True, False, 3, "password", "generated/hasil.mp3")
-    content, ext = extract_message("generated/hasil.mp3", "password")
-    filename = "generated/hasil2." + str(ext)
+    embed_message("birdbrain.mp3", "payloads/3.png", True, False, 3, "password", "generated/hasil3.mp3")
+    content, ext = extract_message("generated/hasil3.mp3", "password")
+    filename = "generated/hasil3." + str(ext)
     with open(filename, "wb+") as file:
         file.write(content)
